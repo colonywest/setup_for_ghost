@@ -1,4 +1,4 @@
-# Ghost prerequisite setup script for Ubuntu distros
+# Ghost prerequisite setup
 
 Why go through the [manual instructions for installing Ghost](https://ghost.org/docs/install/ubuntu/) when this script merely prompts you for a couple details and does the rest. It won't install Ghost, but it installs all the prerequisites so you don't have to waste your time doing that dirty work.
 
@@ -6,11 +6,15 @@ Run this script and in a couple minutes you'll be ready to install Ghost to your
 
 ## Requirements
 
-I wrote this script to work only with Ubuntu-based distros and have tested it with Ubuntu and Linux Mint. So if your distro is an Ubuntu-derivative, it should work.
+There are two versions of the script: Ubuntu and Amazon Linux 2023.
 
-The only strict requirement: the distro must be derived from 24.04 LTS ("Noble Numbat") or 22.04 LTS ("Jammy Jellyfish"). This is detected using the "os-release" file stored at `/etc/os-release`. If you run this script on a distro derived from 24.04 LTS or 22.04 LTS but it says you are not on a supported distribution, it's likely the distro's maintainers are not correctly populating `UBUNTU_CODENAME` in os-release.
+You should be running this on a fresh Linux installation (e.g., a new cloud VM instance) with all updates applied, or at least an install that does not have nginx (or any other web server), Node.js, and MySQL or MariaDB already installed. It will not check for these in advance.
 
-And one last note: you should be running this on a fresh Linux installation (e.g., a new cloud VM instance) with all updates applied, or at least an install that does not have nginx (or any other web server), Node.js, and MySQL or MariaDB already installed. It will not check for these in advance.
+### Ubuntu-based distributions
+
+So far Linux Mint is the only Ubuntu-derived distro on which this script has been tested.
+
+Whichever distro you choose must be derived from 24.04 LTS ("Noble Numbat") or 22.04 LTS ("Jammy Jellyfish"). And the `UBUNTU_CODENAME` field in `/etc/os-release` must have the right string to reflect from which Ubuntu version it is derived. If the distro packager claims it's derived from one of the required releases but the script errors out, it's likely `UBUNTU_CODENAME` is not being set properly.
 
 ## Using this script
 
@@ -41,9 +45,11 @@ All information you need to configure Ghost is output at the end of the script r
 
 I want to see if I can get this script working on other Debian and non-Debian distros - e.g., [Linux Mint Debian Edition (LMDE)](https://linuxmint.com/download_lmde.php) and [Rocky Linux](https://rockylinux.org/). *Officially* [Ghost supports only Ubuntu](https://ghost.org/docs/hosting/), but since it all runs in Node.js, there isn't any reason it can't work elsewhere.
 
+Linux distros supported by major cloud service providers, though, will be the priority.
+
 ## Copyright, License, Disclaimer
 
-Copyright &copy; 2024 Kenneth Ballard
+Copyright &copy; 2024-2025 Kenneth Ballard
 
 Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0) (the "License"); you may not use this file except in compliance with the License.
 

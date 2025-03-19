@@ -16,8 +16,8 @@
 # in any way.
 
 # This script is written with the presumption it is being run on a fresh
-# Ubuntu LTS installation. And I wrote it because I feel that if it can be a
-# script, it should be a script.
+# Amazon Linux 2023 installation. And I wrote it because I feel that if it 
+# can be a script, it should be a script.
 
 function map_os_release {
     mapfile os_release <<< $(cat /etc/os-release)
@@ -34,6 +34,16 @@ function map_os_release {
     done
 }
 
+function randomize_string {
+    if [[ -n $1 ]]; then
+        shuffle_count=$(($RANDOM % 10))
+        shuffle_count=$((shuffle_count + 1))
+
+        string_to_shuffle=$1
+        echo -e "import random\nprint(''.join(random.sample('$string_to_shuffle', ${#string_to_shuffle})))" | python3
+    fi
+}
+
 function read_trap {
     echo
     echo Aborting...
@@ -48,25 +58,15 @@ map_os_release
 # Sanity checks:
 # 1. Make sure we're on a supported Ubuntu distro or Ubuntu derivation
 
+os_id="${os_release_map[ID]}"
+os_version_id="${os_release_map[VERSION_ID]}"
 os_name="${os_release_map[NAME]}"
-os_codename="${os_release_map[UBUNTU_CODENAME]}"
-os_arch=$(dpkg --print-architecture)
-
-# Simple way to check: if UBUNTU_CODENAME isn't specified, it isn't an
-# Ubuntu-derived Linux distro.
-
-if [[ -z "$os_codename" ]]; then
-    echo This script is written for an Ubuntu-based Linux distribution.
-    exit
-fi
 
 # And if the codename is "noble" or "jammy", presume the script will work.
 # Anything else, though... abort!
 
-if [[ "$os_codename" != "noble" && "$os_codename" != "jammy" ]]; then
-    echo This script is written for a Linux distribution derived from Ubuntu
-    echo 22.04 LTS \(\"Jammy Jellyfish\"\) or 24.04 LTS \(\"Nobile Numbat\"\).
-
+if [[ "$os_id" != 'amzn' ]] || [[ "$os_version_id" != '2023' ]]; then
+    echo This script is written for Amazon Linux 2023.
     exit
 fi
 
@@ -79,33 +79,33 @@ if [[ "$(whoami)" == 'root' ]]; then
     exit
 fi
 
-# 3. But... make sure the current user is part of the 'sudo' group.
+# 3. But... make sure the current user is part of the 'wheel' group.
 
 groups="$(groups)"
 user_groups=(${groups// / })
 has_sudo=0
 for group_i in "${user_groups[@]}"; do
-    if [[ "$group_i" == 'sudo' ]]; then
+    if [[ "$group_i" == 'wheel' ]]; then
         has_sudo=1
         break
     fi
 done
 
-if [[ has_sudo == 0 ]]; then
+if [[ $has_sudo == 0 ]]; then
     echo You must run this script as a user with sudo privileges. The current
-    echo user \($(whoami)\) is not in the \'sudo\' group.
+    echo user \($(whoami)\) is not in the \'wheel\' group.
     exit
 fi
 
 # Now for the main event!
 
 echo
-echo Welcome! I will prepare your ${os_release_map[PRETTY_NAME]} instance for installing the
+echo Welcome! I will prepare your Amazon Linux 2023 instance for installing the
 echo Ghost content management system - https://ghost.org - by installing all
 echo needed prerequisites: Node.js, Ghost CLI, nginx, and MySQL. These will be
-echo installed from their *official* repositories, not the $os_name repositories.
+echo installed from their *official* repositories, not the Amazon Linux repositories.
 echo
-echo I am intended to be run on a fresh system install. While I can be run on a
+echo I am intended to be run on a fresh instance. While I can be run on a
 echo non-clean system, I cannot guarantee this will be successful and that your
 echo system won\'t be maimed in the process. So if you are not running this on
 echo a clean system, you have been warned!
@@ -159,7 +159,7 @@ echo
 echo Should I install MySQL Server on this host?
 echo
 echo Note that I will be installing MySQL Community Edition from the official
-echo MySQL APT repository. So answer N if you do not want this or you will be
+echo MySQL RPM repository. So answer N if you do not want this or you will be
 echo using a separate host for MySQL.
 echo
 echo Note: Anything other than \'Y/y\' will be treated as No.
@@ -210,78 +210,44 @@ echo Continuing...
 
 ghost_user_password=$(curl -s "https://www.random.org/strings/?num=1&len=16&digits=on&upperalpha=on&loweralpha=on&unique=on&format=plain&rnd=new")
 
-sudo useradd --create-home --groups sudo $ghost_user --shell $SHELL
+sudo useradd --home /home/ghost --groups wheel $ghost_user --shell $SHELL
 echo "$ghost_user:$ghost_user_password" | sudo chpasswd
 sudo usermod -aG $ghost_user $(whoami)
 
 # Now to create all the needed repositories up front. That way there is
-# only one call to "apt update" and "apt install" later.
-
-keyrings_dir=/usr/share/keyrings
-sudo mkdir -p $keyrings_dir
+# only one call to "dnf makecache" and "dnf install" later.
 
 # nginx repository
 
-nginx_keyring="$keyrings_dir/nginx-archive-keyring.gpg"
+nginx_repo="\
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/amzn/2023/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9"
 
-curl -s https://nginx.org/keys/nginx_signing.key |\
-    gpg --dearmor |\
-    sudo tee $nginx_keyring > /dev/null
-
-echo "deb [arch=$os_arch signed-by=$nginx_keyring] http://nginx.org/packages/ubuntu $os_codename nginx" |\
-    sudo tee /etc/apt/sources.list.d/nginx.list > /dev/null
+echo "$nginx_repo" | sudo tee /etc/yum.repos.d/nginx.repo
 
 # Node.js
 
-node_keyring="$keyrings_dir/nodesource.gpg"
-
-curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o $node_keyring
-
-NODE_MAJOR=20 # Latest version that Ghost supports
-echo "deb [arch=$os_arch signed-by=$node_keyring] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list > /dev/null
+NODE_MAJOR=20
+curl -fsSL "https://rpm.nodesource.com/setup_$NODE_MAJOR.x" | sudo bash -
 
 # MySQL
 
 if [[ "$install_mysql" == 'y' ]]; then
 
-    # Start by setting up the repository, starting with the PGP keys.
-    # These IDs are the fingerprints for all keys associated with
-    # "mysql-build@oss.oracle.com", which is the ID of the signing key
-    # for the MySQL repo.
+    # Need to install MySQL from the EL9 repo, not FCxx.
 
-    mysql_keyring="$keyrings_dir/mysql-apt-config.gpg"
-    signing_key_ids='467B942D3A79BD29 B7B3B788A8D3785C'
+    rpm_filename="mysql84-community-release-el9-1.noarch.rpm"
+    mysql_rpm_url="https://dev.mysql.com/get/$rpm_filename"
 
-    # Use a temp folder for gpg so we avoid importing keys into the main
-    # keyring for the user. The chmod call is to avoid the warning
-    # "unsafe permissions on homedir".
-
-    gpg_temp=./.gpg_temp
-
-    mkdir $gpg_temp
-    sudo chmod 700 $gpg_temp
-
-    gpg --homedir $gpg_temp --keyserver keyserver.ubuntu.com --recv-keys $signing_key_ids
-    gpg --homedir $gpg_temp --export $signing_key_ids | sudo tee $mysql_keyring > /dev/null
-    sudo chmod 644 $mysql_keyring
-
-    rm -rf $gpg_temp
-
-    mysql_repo=\
-"deb [arch=$os_arch signed-by=$mysql_keyring] https://repo.mysql.com/apt/ubuntu/ $os_codename mysql-apt-config
-deb [arch=$os_arch signed-by=$mysql_keyring] https://repo.mysql.com/apt/ubuntu/ $os_codename mysql-8.4-lts
-deb [arch=$os_arch signed-by=$mysql_keyring] https://repo.mysql.com/apt/ubuntu/ $os_codename mysql-tools
-deb-src [arch=$os_arch signed-by=$mysql_keyring] https://repo.mysql.com/apt/ubuntu/ $os_codename mysql-8.4-lts"
-
-    echo "$mysql_repo" | sudo tee /etc/apt/sources.list.d/mysql.list > /dev/null
-
-    # Set some selections to avoid being prompted for anything when mysql is installed.
-    # Don't set a root password now, though, as that'll come later.
-
-    sudo debconf-set-selections <<< "mysql-community-server mysql-community-server/root-pass password "
-    sudo debconf-set-selections <<< "mysql-community-server mysql-community-server/re-root-pass password "
-    sudo debconf-set-selections <<< "mysql-community-server mysql-server/default-auth-override select Use Strong Password Encryption (RECOMMENDED)"
-
+    wget $mysql_rpm_url
+    sudo dnf install -y $rpm_filename
+    rm $rpm_filename
 fi
 
 # Run update and install
@@ -291,8 +257,8 @@ if [[ "$install_mysql" == 'y' ]]; then
     packages="$packages mysql-server"
 fi
 
-sudo apt update
-sudo NEEDRESTART_MODE=a apt install -y $packages
+sudo dnf makecache
+sudo dnf install -y $packages
 
 # Config for nginx
 
@@ -311,18 +277,27 @@ if [[ "$install_mysql" == 'y' ]]; then
 
     # Config and final setup for MySQL
 
-    mysql_root_password=$(curl -s "https://www.random.org/strings/?num=1&len=16&digits=on&upperalpha=on&loweralpha=on&unique=on&format=plain&rnd=new")
-    mysql_ghost_password=$(curl -s "https://www.random.org/strings/?num=1&len=16&digits=on&upperalpha=on&loweralpha=on&unique=on&format=plain&rnd=new")
+    mysql_root_password=$(curl -s "https://www.random.org/strings/?num=1&len=15&digits=on&upperalpha=on&loweralpha=on&unique=on&format=plain&rnd=new")
+    mysql_ghost_password=$(curl -s "https://www.random.org/strings/?num=1&len=15&digits=on&upperalpha=on&loweralpha=on&unique=on&format=plain&rnd=new")
 
-    sudo systemctl enable --now mysql
+    sudo systemctl enable --now mysqld
 
-    ghost_mysql="CREATE DATABASE ghost; \
+    mysql_temp_password=$(sudo cat /var/log/mysqld.log | grep -E 'temporary password.+root@localhost:' | sed -E 's/^.+localhost: (.+)/\1/g')
+
+    # A little unusual sequence here. Take the temp password, which matches
+    # the default complexity requirements, and append it to the end of the
+    # random string. Then shuffle it all together.
+
+    mysql_root_password=$(randomize_string "$mysql_root_password$mysql_temp_password")
+    mysql_ghost_password=$(randomize_string "$mysql_ghost_password$mysql_temp_password")
+
+    ghost_mysql="ALTER USER 'root'@'localhost' IDENTIFIED BY '$mysql_root_password'; \
+    CREATE DATABASE ghost; \
     CREATE USER 'ghost'@'%' IDENTIFIED BY '$mysql_ghost_password'; \
     GRANT ALL PRIVILEGES ON ghost.* TO 'ghost'@'%'; \
-    ALTER USER 'root'@'localhost' IDENTIFIED BY '$mysql_root_password'; \
     FLUSH PRIVILEGES;"
 
-    sudo mysql --user=root -e "$ghost_mysql"
+    sudo mysql --user=root --password=$mysql_temp_password --connect-expired-password -e "$ghost_mysql"
 
 fi
 
@@ -351,7 +326,7 @@ MySQL \"ghost\" password: $mysql_ghost_password
 
 During the Ghost installation, make sure to use these values when prompted:
 
-MySQL hostname:      localhost (should be the default)
+MySQL hostname:      127.0.0.1 (should be the default)
 MySQL username:      ghost
 MySQL password:      $mysql_ghost_password
 Ghost database name: $ghost_db
