@@ -233,7 +233,7 @@ echo "$nginx_repo" | sudo tee /etc/yum.repos.d/nginx.repo
 
 # Node.js
 
-NODE_MAJOR=20
+NODE_MAJOR=22
 curl -fsSL "https://rpm.nodesource.com/setup_$NODE_MAJOR.x" | sudo bash -
 
 # MySQL
