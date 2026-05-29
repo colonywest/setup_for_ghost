@@ -3,9 +3,9 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -206,6 +206,13 @@ echo
 read -p "Press ENTER to continue, or Ctrl+C to abort."
 echo Continuing...
 
+if [[ -z $(which curl) ]]; then
+
+    echo cURL doesn\'t appear to be installed. Installing it now.
+    sudo apt install -y curl
+
+fi
+
 # First, let's create the new "ghost" user.
 
 ghost_user_password=$(curl -s "https://www.random.org/strings/?num=1&len=16&digits=on&upperalpha=on&loweralpha=on&unique=on&format=plain&rnd=new")
@@ -378,3 +385,4 @@ echo
 echo "$final_output" | tee ghost_setup.log
 echo
 echo These details were also written to ghost_setup.log
+
